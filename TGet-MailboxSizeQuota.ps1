@@ -14,8 +14,8 @@
     The above command will return all mailboxes with a quota usage of 85% and above
 .NOTES
     Author:  Peter Haake
-    Version: 0.3
-    Date:    2015-03-26    
+    Version: 0.4
+    Date:    2015-03-27
 #>
 #
 # Load the Exchange Management Module
@@ -58,11 +58,13 @@ foreach ($usr_mailbox in $Mailboxes)
     if ($usr_mailbox.ProhibitSendQuota -eq "Unlimited") {
         # Get quota from Database
         [INT64]$usr_quota = [convert]::ToInt64(((($usr_mailboxstats.DatabaseProhibitSendQuota.ToString().split("(")[-1]).split(")")[0]).split(" ")[0]-replace '[,]',''))
+        # Mailbox is using database default quota levels
         $usr_quota_default = "Yes"
         }
     else {
         # Get quota from user mailbox
         [INT64]$usr_quota = [convert]::ToInt64(((($usr_mailbox.ProhibitSendQuota.ToString().split("(")[-1]).split(")")[0]).split(" ")[0]-replace '[,]',''))
+        # Mailbox is using individually set quota levels
         $usr_quota_default = "No"
     }
     # Calculate the quota percentage
