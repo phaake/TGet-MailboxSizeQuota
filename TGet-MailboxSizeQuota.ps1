@@ -15,17 +15,24 @@
 .NOTES
     Author:  Peter Haake
     Version: 0.4
-    Date:    2015-03-27
+    Date:    2015-03-30
 #>
+
+<#
+Revision History
+
+0.3 2015-03-26
+First version in revision control
+
+0.4 2015-03-30
+Removed the work-around for number format
+Changed number format in the output, from bytes to MB
+
+#>
+
 #
 # Load the Exchange Management Module
 Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
-# Make sure en-us locale is used no matter what the server/user has configured
-# Keep this section if you output decimal numbers
-# Slightly modified from From http://occasionalutility.blogspot.com.au/2014/03/everyday-powershell-part-17-using-new.html
-[System.Reflection.Assembly]::LoadWithPartialName("System.Threading")>$null
-[System.Reflection.Assembly]::LoadWithPartialName("System.Globalization")>$null
-[System.Threading.Thread]::CurrentThread.CurrentCulture = [System.Globalization.CultureInfo]::CreateSpecificCulture("en-us")
 
 #Set quotalimit to the first parameter passed. If no parameter is passed, set it at 80%
 if ([INT]$args[0] -gt "") {
@@ -37,34 +44,33 @@ else {
 
 
 # Get all mailboxes
-$Mailboxes = @(Get-Mailbox -ResultSize Unlimited | select-object DisplayName, Identity, ProhibitSendQuota, ProhibitSendReceiveQuota)
+$Mailboxes = @(Get-Mailbox -ResultSize Unlimited | select-object DisplayName, Identity, ProhibitSendQuota, ProhibitSendReceiveQuota, UseDatabaseQuotaDefaults)
 # Clear the report object variable
 $Report =@()
 
 # Loop through all mailboxes
 foreach ($usr_mailbox in $Mailboxes)
 {
-    # Clear variables (add all...)
-    $usr_quota_default = "N/A"
     # Get statistics for all mailboxes
     $usr_mailboxstats = Get-MailboxStatistics -identity $usr_mailbox.Identity | select-object Displayname,Identity,Database,TotalItemSize,TotalDeletedItemSize,DatabaseIssueWarningQuota,DatabaseProhibitSendQuota
+#    $usr_mailboxstats = Get-MailboxStatistics -identity petero | select-object Displayname,Identity,Database,TotalItemSize,TotalDeletedItemSize,DatabaseIssueWarningQuota,DatabaseProhibitSendQuota
 
     #Convert TotalItemSize to INT64 and remove crap (looks like this initially "1.123 GB (1,205,513,370 bytes)" and comes out as a numeric 1205513370)
-    [int64]$usr_mailboxstats_totalitemsize = [convert]::ToInt64(((($usr_mailboxstats.TotalItemSize.ToString().split("(")[-1]).split(")")[0]).split(" ")[0]-replace '[,]',''))
+    $usr_mailboxstats_totalitemsize = $usr_mailboxstats.TotalItemSize.Value.ToBytes()
     #Convert TotalDeletedItemSize to INT and remove crap (looks like this initially "1.123 GB (1,205,513,370 bytes)" and comes out as a numeric 1205513370)
-    [int64]$usr_mailboxstats_totaldeleteditemsize = [convert]::ToInt64(((($usr_mailboxstats.TotalDeletedItemSize.ToString().split("(")[-1]).split(")")[0]).split(" ")[0]-replace '[,]',''))
+    $usr_mailboxstats_totaldeleteditemsize = $usr_mailboxstats.TotalDeletedItemSize.Value.ToBytes()
 
     # If the mailbox quota is Unlimited, then the database defaults are used.
-    if ($usr_mailbox.ProhibitSendQuota -eq "Unlimited") {
+    if ($usr_mailbox.UseDatabaseQuotaDefaults -eq "True") {
         # Get quota from Database
-        [INT64]$usr_quota = [convert]::ToInt64(((($usr_mailboxstats.DatabaseProhibitSendQuota.ToString().split("(")[-1]).split(")")[0]).split(" ")[0]-replace '[,]',''))
-        # Mailbox is using database default quota levels
+        $usr_quota = $usr_mailboxstats.DatabaseProhibitSendQuota.Value.ToBytes()
+        $usr_quota_MB = $usr_mailboxstats.DatabaseProhibitSendQuota.Value.ToMB()
         $usr_quota_default = "Yes"
         }
     else {
         # Get quota from user mailbox
-        [INT64]$usr_quota = [convert]::ToInt64(((($usr_mailbox.ProhibitSendQuota.ToString().split("(")[-1]).split(")")[0]).split(" ")[0]-replace '[,]',''))
-        # Mailbox is using individually set quota levels
+        $usr_quota = $usr_mailbox.ProhibitSendQuota.Value.ToBytes()
+        $usr_quota_MB = $usr_mailbox.ProhibitSendQuota.Value.ToMB()
         $usr_quota_default = "No"
     }
     # Calculate the quota percentage
@@ -74,9 +80,9 @@ foreach ($usr_mailbox in $Mailboxes)
     if ($usr_quota_percentage -ge $QuotaLimit) {
         $usr_reportObject = New-Object PSObject
         $usr_reportObject | Add-Member -MemberType NoteProperty -Name "DisplayName" -Value $usr_mailboxstats.DisplayName
-        $usr_reportObject | Add-Member -MemberType NoteProperty -Name "TotalItemSize" -Value $usr_mailboxstats_totalitemsize
-        $usr_reportObject | Add-Member -MemberType NoteProperty -Name "TotalDeletedItemSize" -Value $usr_mailboxstats_totaldeleteditemsize
-        $usr_reportObject | Add-Member -MemberType NoteProperty -Name "ProhibitSendQuota" -Value $usr_quota
+        $usr_reportObject | Add-Member -MemberType NoteProperty -Name "TotalItemSize (MB)" -Value $usr_mailboxstats.TotalItemSize.Value.ToMB()
+        $usr_reportObject | Add-Member -MemberType NoteProperty -Name "TotalDeletedItemSize (MB)" -Value $usr_mailboxstats.TotalDeletedItemSize.Value.ToMB()
+        $usr_reportObject | Add-Member -MemberType NoteProperty -Name "ProhibitSendQuota (MB)" -Value $usr_quota_MB
         $usr_reportObject | Add-Member -MemberType NoteProperty -Name "QuotaPercent" -Value $usr_quota_percentage
         $usr_reportObject | Add-Member -MemberType NoteProperty -Name "DBDefaultQuota" -Value $usr_quota_default
         $report += $usr_reportObject
