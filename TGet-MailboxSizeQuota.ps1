@@ -53,7 +53,6 @@ foreach ($usr_mailbox in $Mailboxes)
 {
     # Get statistics for all mailboxes
     $usr_mailboxstats = Get-MailboxStatistics -identity $usr_mailbox.Identity | select-object Displayname,Identity,Database,TotalItemSize,TotalDeletedItemSize,DatabaseIssueWarningQuota,DatabaseProhibitSendQuota
-#    $usr_mailboxstats = Get-MailboxStatistics -identity petero | select-object Displayname,Identity,Database,TotalItemSize,TotalDeletedItemSize,DatabaseIssueWarningQuota,DatabaseProhibitSendQuota
 
     #Convert TotalItemSize to INT64 and remove crap (looks like this initially "1.123 GB (1,205,513,370 bytes)" and comes out as a numeric 1205513370)
     $usr_mailboxstats_totalitemsize = $usr_mailboxstats.TotalItemSize.Value.ToBytes()
